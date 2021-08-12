@@ -1,0 +1,78 @@
+local LI = game:GetService("Lighting")
+local UIS = game:GetService("UserInputService")
+local RUN = game:GetService("RunService")
+local PL = game:GetService("Players")
+
+local plr = PL.LocalPlayer
+
+local mouse = plr:GetMouse()
+
+local cam = workspace.CurrentCamera
+
+local Holding = {}
+local Dragging = nil
+
+local remote = LI:WaitForChild("VoidSBcommuncationRemoteForFlyer_897_")
+print("Found connection")
+remote:FireServer("RegisterPlr","InitializeKey24874")
+print("Connecting to server...")
+
+remote.OnClientEvent:Connect(function(event, data)
+	if event == "RegisterChar" then
+		print("Established connection to client")
+		local char = workspace:WaitForChild(data)
+		local root = char:WaitForChild("Root")
+		cam.CameraSubject = root
+		update = RUN.Heartbeat:Connect(function()
+			if root.Parent == nil or root.Parent.Parent == nil or char == nil or char.Parent == nil or char.Parent.Parent == nil then
+				update:Disconnect()
+			end
+			if Holding[Enum.UserInputType.MouseButton1] then
+				remote:FireServer("Cam",{cam.CFrame, mouse.Hit.p})
+				if Holding[Enum.KeyCode.LeftControl] then
+					mouse.TargetFilter = Dragging
+				else
+					mouse.TargetFilter = char
+				end	
+			else
+				mouse.TargetFilter = char
+				remote:FireServer("Cam",cam.CFrame)
+			end
+		end)	
+	elseif event == "Stop" then
+		update:Disconnect()
+		began:Disconnect()
+		ended:Disconnect()
+		script:Destroy()
+	end
+end)
+
+began = UIS.InputBegan:Connect(function(key, proccessed)
+	if proccessed then return end
+	remote:FireServer("InputStart",{key.KeyCode, key.UserInputType, cam.CFrame, mouse.Hit.p,mouse.Target})
+	if key.UserInputType == Enum.UserInputType.Keyboard then
+		Holding[key.KeyCode] = true
+	elseif mouse.Target and mouse.Target.Parent then
+		local target = mouse.Target
+		if target.Parent:IsA("Workspace") == false then
+			repeat
+				target = target.Parent
+			until target.Parent:IsA("Workspace")	
+		end	
+		Dragging = target
+		Holding[key.UserInputType] = true
+	end
+end)
+
+ended =UIS.InputEnded:Connect(function(key, proccessed)
+	if proccessed then return end
+	remote:FireServer("InputEnd", {key.KeyCode, key.UserInputType})
+	if key.UserInputType == Enum.UserInputType.Keyboard then
+		Holding[key.KeyCode] = nil
+	else
+		Dragging = nil
+		Holding[key.UserInputType] = nil
+	end
+
+
+end)
