@@ -1,0 +1,1022 @@
+-- right click = laser beam, e = explosion, f = BlackHole, k = fastkill, r = clear BlackHoles, g = eat, ctrl+left click = drag, shift+left click = super beam
+local RS = game:GetService("ReplicatedStorage")
+local LI = game:GetService("Lighting")
+local PL = game:GetService("Players")
+local RUN = game:GetService("RunService")
+local TS = game:GetService("TweenService")
+local SS = game:GetService("ServerStorage")
+
+local LinearTransparencyTween = TweenInfo.new(1,Enum.EasingStyle.Linear)
+local ExplosionSizeTween = TweenInfo.new(1,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+local ExplosionTransparencyTween = TweenInfo.new(1,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+
+local BlackHoleSizeTween = TweenInfo.new(1,Enum.EasingStyle.Quad,Enum.EasingDirection.InOut)
+
+
+local plr = nil
+local key = math.random(1,1000)
+local Holding = {}
+local changeConnections = {}
+local stop = false
+local MousePos = Vector3.new(0,0,0)
+local Boss = false
+
+local Speed = 0.5
+local ExplosionSize = 30
+local IgnoreChanges = {
+	"Position", 
+	"Orientation",
+	"CFrame",
+	"Rotation",
+	"DraggingV1", 
+	"TextBounds",
+	"AbsoluteSize", 
+	"AbsoluteRotation", 
+	"TextFits",
+	"SoundId",
+	"Playing",
+	"TimeLength",
+	"TimePosition",
+	"Text",
+	"NetworkOwnerV3",
+	"NetworkSleeping",
+	--"Color",
+	--"BrickColor",
+	"Color3uint8",
+	"AssemblyCenterOfMass",
+	"WorldPivotData",
+	"WorldPivot",
+	"IsLoaded",
+	char = false
+}
+
+local CharIgnoreChanges = {
+	"WorldPivotData" , 
+	"WorldPivot" , 
+	"Pivot Offset Position" ,
+	"Origin Position",
+	"Origin Orientation",
+	"World Pivot Orientation",
+	"Pivot Offset Orientation",
+	"World Pivot Position"
+}
+
+local Movable = {
+	"Model",
+	"BasePart",
+	"MeshParts",
+	"UnionOperation",
+
+}
+
+local Saves = {
+	CFrames = {
+		Root = CFrame.new(0,5,0),
+		ArmX1 = CFrame.new(0,5,0)*CFrame.Angles(0,0,0),
+		ArmY1 = CFrame.new(0,5,0)*CFrame.Angles(0,0,math.rad(90))
+	},
+	Sounds = {
+		AmbientTimePosition = 0
+	}	
+}
+
+local function GetTouchingParts(part)
+	local connection = part.Touched:Connect(function() end)
+	local results = part:GetTouchingParts()
+	connection:Disconnect()
+	return results
+end
+
+local function GetTopParent(part)
+	if part.Parent ~= workspace then
+		repeat
+			part = part.Parent
+		until part.Parent == workspace
+	end	
+	return part
+end
+
+local function tweenModel(model, CF, info)
+	local CFrameValue = Instance.new("CFrameValue")
+	CFrameValue.Value = model:GetPrimaryPartCFrame()
+
+	CFrameValue:GetPropertyChangedSignal("Value"):Connect(function()
+		model:SetPrimaryPartCFrame(CFrameValue.Value)
+	end)
+
+	local tween = TS:Create(CFrameValue, info, {Value = CF})
+	tween:Play()
+
+	tween.Completed:Connect(function()
+		CFrameValue:Destroy()
+	end)
+	return tween
+end
+
+local function resizeModel(model, s)
+	local base = model.PrimaryPart.Position
+	for _, part in pairs(model:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.Position = base:Lerp(part.Position, s)
+			part.Size *= s
+		end
+	end
+end
+
+local function tweenModelSize(model, duration, factor, easingStyle, easingDirection)
+	local s = factor - 1
+	local i = 0
+	local oldAlpha = 0
+	while i < 1 do
+		local dt = RUN.Heartbeat:Wait()
+		i = math.min(i + dt/duration, 1)
+		local alpha = TS:GetValue(i, easingStyle, easingDirection)
+		resizeModel(model, (alpha*s + 1)/(oldAlpha*s + 1))
+		oldAlpha = alpha
+	end
+end
+
+local function GetAvgSize(p)
+	local m = 0
+	local n = 1
+	
+	if p:IsA("BasePart") then
+		m = math.max(p.Size.X,p.Size.Y,p.Size.Z)
+	end
+	
+	for i,v in pairs(p:GetDescendants()) do
+		if v:IsA("BasePart") then --and math.max(v.Size.X,v.Size.Y,v.Size.Z) > m then
+			m = m+math.max(v.Size.X,v.Size.Y,v.Size.Z)
+			n+=1
+		end
+	end
+	
+	m/=n
+				
+	return m
+end
+
+
+function LaserBeam(pos)
+	local shot = Instance.new("Part")
+	shot.CFrame = CFrame.new(root.Position, pos)* CFrame.new(0, 0, -500.5)* CFrame.Angles(0,math.rad(90),0)
+	shot.Size = Vector3.new(1000,1,1)
+	shot.Anchored = true
+
+	shot.Shape = Enum.PartType.Cylinder
+	shot.Material = Enum.Material.Neon
+	shot.Color = Color3.fromRGB(220,0,0)
+
+	shot.Parent = workspace
+
+	local s =Instance.new("Sound")
+	s.SoundId = "rbxassetid://180204650"
+	s.Volume = 10
+	s.TimePosition = 0.05
+	s.Parent = shot
+	s:Play()
+
+	coroutine.wrap(function()
+		while shot.Parent do
+			local hitting = GetTouchingParts(shot)
+			for i,v in pairs(hitting) do
+				if v.Parent ~= char and math.max(v.Size.X,v.Size.Y,v.Size.Z) < 30 then
+					coroutine.wrap(function()
+						v.Color = Color3.fromRGB(70,0,0)
+						local tween = TS:Create(v, LinearTransparencyTween, {Transparency = 1})
+						tween:Play()
+						tween.Completed:Wait()
+						v:Destroy()
+					end)()	
+				end
+			end
+			wait(0.1)
+		end	
+	end)()
+
+
+	local tween = TS:Create(shot, LinearTransparencyTween, {Transparency = 1})
+	tween:Play()
+	tween.Completed:Wait()
+	shot:Destroy()
+end
+
+function Explosion()	
+	local tweenSize
+	local tweenTransparency
+	for i = 1,10 do
+		local p = Instance.new("Part")
+		p.Shape = Enum.PartType.Ball
+		p.Size = Vector3.new(1,1,1)
+		p.Material = Enum.Material.Neon
+		p.Color = Color3.fromRGB(100-i*10,100-i*10,100-i*10)
+		p.Transparency = 0.5
+		p.Name = "ExplosionPart"..i
+		p.Position = root.Position
+		p.Anchored = true
+		p.CanCollide = false
+		p.Parent = char
+		
+		tweenSize = TS:Create(p,ExplosionSizeTween,{Size=Vector3.new(ExplosionSize-i*2,ExplosionSize-i*2,ExplosionSize-i*2)})
+		tweenTransparency = TS:Create(p, ExplosionTransparencyTween, {Transparency=1})
+		tweenSize:Play()
+		tweenTransparency:Play()
+		game.Debris:AddItem(p,1)
+	end
+	local r = Region3.new(
+		Vector3.new(root.Position.X-ExplosionSize/2,root.Position.Y-ExplosionSize/2,root.Position.Z-ExplosionSize/2),
+		Vector3.new(root.Position.X+ExplosionSize/2,root.Position.Y+ExplosionSize/2,root.Position.Z+ExplosionSize/2)
+	)
+	local parts1 = workspace:FindPartsInRegion3WithIgnoreList(r, char:GetDescendants(), math.huge)	
+	for i,v in pairs(parts1) do
+		if v.Name ~= "Baseplate" and math.max(v.Size.X,v.Size.Y,v.Size.Z) < 10 then
+			v:Destroy()
+		end
+	end
+	local s =Instance.new("Sound")
+	s.SoundId = "rbxassetid://2544621925"
+	s.Volume = 4
+	s.TimePosition = 0.05
+	s.Parent = root
+	s:Play()
+	game.Debris:AddItem(s,2)
+	tweenSize.Completed:Wait()
+	local parts2 = workspace:FindPartsInRegion3WithIgnoreList(r, char:GetDescendants(), math.huge)	
+	for i,v in pairs(parts2) do
+		if v.Name ~= "Baseplate" and math.max(v.Size.X,v.Size.Y,v.Size.Z) < 10 then
+			v:Destroy()
+		end
+	end
+end
+
+function BlackHole(pos)
+	local PosTweenInfo = TweenInfo.new((root.Position-pos).Magnitude/150, Enum.EasingStyle.Linear)
+	local ObjectTweenInfo = TweenInfo.new((root.Position-pos).Magnitude/150, Enum.EasingStyle.Linear)
+
+	
+	local Center = Instance.new("Part")
+	Center.Anchored = true
+	Center.Position = root.Position
+	Center.Shape = Enum.PartType.Ball
+	Center.Size = Vector3.new(3,3,3)
+	Center.Material = Enum.Material.Neon
+	Center.Color = Color3.fromRGB(0,0,0)
+	Center.Name = "BlackHoleCenter"..key
+	Center.Parent = workspace	
+	
+	game.Debris:AddItem(Center,30)
+	
+	local CenterPosTween = TS:Create(Center, PosTweenInfo, {Position = pos})
+	CenterPosTween:Play()
+		
+	for i = 1,10 do
+		local p = Instance.new("Part")
+		p.Shape = Enum.PartType.Ball
+		p.Size = Vector3.new(4/i,4/i,4/i)
+		p.Material = Enum.Material.Neon
+		p.Color = Color3.fromHSV(0.755611, 0.970245, i/10)
+		p.Transparency = 0.5
+		p.Name = "BlackHolePart"
+		p.Position = root.Position
+		p.Anchored = true
+		p.CanCollide = false
+		p.Parent = Center
+
+		local tweenSizeOut = TS:Create(p,BlackHoleSizeTween,{Size=Vector3.new(20,20,20)})
+		local tweenSizeIn = TS:Create(p,BlackHoleSizeTween,{Size=Vector3.new(4,4,4)})
+		local tweenPos = TS:Create(p, PosTweenInfo, {Position = pos})
+
+		coroutine.wrap(function()
+			tweenPos:Play()
+			tweenPos.Completed:Wait()
+			wait(i/10)
+			while true do
+				tweenSizeOut:Play()
+				tweenSizeOut.Completed:Wait()
+				wait(i/100)
+				tweenSizeIn:Play()
+				tweenSizeIn.Completed:Wait()
+				wait(i/100)
+			end	
+		end)()
+	end
+	
+	CenterPosTween.Completed:Wait()
+	
+	local s =Instance.new("Sound")
+	s.SoundId = "rbxassetid://2293073427"
+	s.Volume = 2.5
+	s.RollOffMinDistance = 20
+	s.Looped = true
+	s.Parent = Center
+	s:Play()
+
+	
+	local r = Region3.new(
+		Vector3.new(pos.X-40,pos.Y-40,pos.Z-40),
+		Vector3.new(pos.X+40,pos.Y+40,pos.Z+40)
+	)
+	
+	local Ignore = char:GetDescendants()
+	Ignore[#Ignore+1]=Center
+	
+	while Center.Parent do
+		local Parts = workspace:FindPartsInRegion3WithIgnoreList(r, Ignore, math.huge)
+		for i,v in pairs(Parts) do
+			if math.max(v.Size.X,v.Size.Y,v.Size.Z) < 30 and v:FindFirstChild("Sucking"..key) == nil and v.Name ~= "BlackHoleCenter"..key and v.Parent.Name ~= "BlackHoleCenter"..key then
+				coroutine.wrap(function()
+					v.Anchored = true
+					
+					local t = Instance.new("BoolValue")
+					t.Name = "Sucking"..key
+					t.Parent = v
+					
+					local ObjectTweenInfo = TweenInfo.new((v.Position-pos).Magnitude/40+math.random(0.01,0.5), Enum.EasingStyle.Quint,Enum.EasingDirection.InOut)
+
+					local ObjectTween = TS:Create(v, ObjectTweenInfo, {Position = pos})
+					ObjectTween:Play()
+					ObjectTween.Completed:Wait()
+					local ObjectTransparencyTween = TS:Create(v, LinearTransparencyTween, {Transparency = 1})
+					ObjectTransparencyTween:Play()
+					ObjectTransparencyTween.Completed:Wait()
+					v:Destroy()
+				end)()
+			end
+		end
+		wait(1)
+	end	
+end
+
+function MouseDrag(target)
+	if target == nil then return end
+	if math.max(target.Size.X,target.Size.Y,target.Size.Z) > 50 then
+		warn("Unable to drag "..target.Name..", to big "..math.max(target.Size.X,target.Size.Y,target.Size.Z))
+		return
+	end
+	
+	target = GetTopParent(target)
+	local working = false
+	for i,v in pairs(Movable) do
+		if target:IsA(v) then
+			working = true
+		end
+	end
+	
+	if not working then
+		local m = Instance.new("Model")
+		m.Name = "Moving"
+		m.Parent = workspace
+		target.Parent = m
+		for i,v in pairs(target:GetDescendants()) do
+			if v:isA("BasePart") then
+				m.PrimaryPart = v
+			end
+		end
+		target = m
+	end
+	
+		
+	local DragLine = Instance.new("Part")
+	DragLine.Anchored = true
+	DragLine.CanCollide = false
+	DragLine.Material = Enum.Material.Neon
+	DragLine.Color = Color3.fromRGB(10,0,0)
+	DragLine.Transparency = 0.5
+	DragLine.Shape = Enum.PartType.Cylinder
+	DragLine.Massless = true
+	DragLine.Name = "DragLine"
+
+	DragLine.Parent = target
+	
+	local tPos = MousePos
+
+	while Holding[Enum.UserInputType.MouseButton1] and target and target.Parent do
+		if target:IsA("Model") then
+			target:MoveTo(MousePos)
+			local tCf =target:GetBoundingBox()
+			tPos = Vector3.new(tCf.X,tCf.Y,tCf.Z)
+		else
+			target.Position = MousePos
+			tPos = target.Position
+		end
+		local dist = math.clamp((root.Position-tPos).Magnitude,1,300)
+		DragLine.Size = Vector3.new(dist,.5,.5)
+		DragLine.CFrame = CFrame.new(root.Position, tPos)* CFrame.new(0, 0, -dist/2)* CFrame.Angles(0,math.rad(90),0)
+		RUN.Heartbeat:Wait()
+	end
+	DragLine:Destroy()
+end
+
+function SuperBeam()
+	local hitbox = Instance.new("Part")
+	hitbox.Anchored=true
+	hitbox.Transparency=1
+	hitbox.CanCollide = false
+	hitbox.Size = Vector3.new(5,5,1000)
+
+	local particlePart = Instance.new("Part")
+	particlePart.Anchored=true
+	particlePart.Transparency=1
+	particlePart.Position = root.Position
+	particlePart.Size = Vector3.new(5,5,1)
+	
+	local particle =  Instance.new("ParticleEmitter")
+	particle.Color = ColorSequence.new(Color3.fromRGB(16,16,16),Color3.fromRGB(17,17,17))
+	particle.Size = NumberSequence.new(0.4,0.4)
+	particle.Texture = "rbxassetid://2807298556"--5065358768"
+	particle.LockedToPart=true
+	particle.EmissionDirection = "Front"
+	particle.Lifetime = NumberRange.new(3,3)
+	particle.Rate = 700
+	particle.Speed = NumberRange.new(200,200)
+	
+	local sound = Instance.new("Sound")
+	sound.SoundId="rbxassetid://1447681819"
+	sound.Looped=true
+	sound.Volume=10
+	sound.EmitterSize=30
+	sound:Play()
+	
+	particle.Parent = particlePart
+	sound.Parent=hitbox
+
+	
+	particlePart.Parent = char
+	hitbox.Parent = char
+	
+	while Holding[Enum.UserInputType.MouseButton1] do
+		particlePart.CFrame = CFrame.new(root.Position,MousePos)*CFrame.new(0,0,-1)
+		hitbox.CFrame = particlePart.CFrame*CFrame.new(0,0,-501)	
+		local Parts = GetTouchingParts(hitbox)
+		for i,part in pairs(Parts) do
+			if part.Parent ~= char and math.max(part.Size.X,part.Size.Y,part.Size.Z) < 30 then
+				part:Destroy()
+			end
+		end
+		RUN.Heartbeat:Wait()
+	end
+	hitbox:Destroy()
+	particlePart:Destroy()
+end
+
+function Eat(target)
+	target = GetTopParent(target)
+	local can = false
+	for i,v in pairs(Movable) do
+		if target:IsA(v) then
+			can = true
+		end
+	end
+	if not can then
+		local m = Instance.new("Model")
+		m.Name = "Moving"
+		m.Parent = workspace
+		target.Parent = m
+		target = m
+	end
+	local size = 0
+	if target:IsA("Model") and target.PrimaryPart == nil then
+		for i,v in pairs(target:GetDescendants()) do
+			if v:IsA("BasePart") and math.max(v.Size.X, v.Size.Y, v.Size.Z) > size then
+				target.PrimaryPart = v
+				v.Anchored = true
+				size = math.max(v.Size.X, v.Size.Y, v.Size.Z)
+			end
+		end
+	end
+	if target:IsA("Model") then
+		if size > 25 then
+			return
+		end
+	elseif target.Size then
+		if math.max(target.Size.X, target.Size.Y, target.Size.Z) > 25 then
+			return
+		end
+	end
+	
+	local t
+	local distance
+	local avg = GetAvgSize(target)
+	if target:IsA("Model") then
+		distance = (target.PrimaryPart.Position-root.Position).Magnitude
+
+		_,avg = target:GetBoundingBox()
+		avg = math.max(avg.X,avg.Y,avg.Z)
+
+		t =tweenModel(target, root.CFrame, TweenInfo.new(distance/50, Enum.EasingStyle.Linear))
+		tweenModelSize(target, distance/50, 2/avg, Enum.EasingStyle.Linear, Enum.EasingDirection.In)
+	else
+		distance = (target.Position-root.Position).Magnitude
+		local divide = math.clamp(2/avg,1,math.huge)
+		t = TS:Create(target, TweenInfo.new(distance/50, Enum.EasingStyle.Linear), {Position = root.Position, Size = Vector3.new(divide,divide,divide)})
+		t:Play()
+	end
+	t.Completed:Wait()
+	target:Destroy()
+end
+
+function SpawnPart(Pos)
+	local p = Instance.new("Part")
+	p.Position = Pos 
+	p.Parent = workspace
+end
+
+if RS:FindFirstChild"VoidSBcommuncationRemoteForFlyer_897_" then
+	remote = LI.VoidSBcommuncationRemoteForFlyer_897_
+else
+	remote = Instance.new("RemoteEvent")
+	remote.Name = "VoidSBcommuncationRemoteForFlyer_897_"
+	remote.Parent = LI
+	
+	RemoteChangeConnection = remote.Changed:Connect(function(prop)
+		warn("Proprty "..prop.." changed on communication remote, reverting", tostring(remote[prop]))
+		if prop == "Parent" and remote.Parent ~= LI then
+			if remote.Parent then remote:Destroy() end
+			
+			remote = Instance.new("RemoteEvent")
+			remote.Name = "VoidSBcommuncationRemoteForFlyer_897_"
+			remote.Parent = LI
+		elseif prop == "Name" then
+			remote.Name = "VoidSBcommuncationRemoteForFlyer_897_"
+		end
+	end)
+end
+print("Connecting to client...")
+
+eventR = remote.OnServerEvent:Connect(function(plrSent,event,data)
+	if event == "Cam" then
+		if type(data) == "table" then
+			char:SetPrimaryPartCFrame(CFrame.new(root.Position, data[1].p))
+			MousePos = data[2]
+		elseif char.PrimaryPart then
+			char:SetPrimaryPartCFrame(CFrame.new(root.Position, data.p))
+		end
+	elseif event == "RegisterPlr" and data == "InitializeKey24874" then
+		print("Established connection to server")
+		plr = plrSent
+		CreateChar()
+	elseif event == "InputStart" then
+		local keyC = data[1]
+		local Type = data[2] 
+		local cf = data[3]
+		local look = cf.LookVector
+		char:SetPrimaryPartCFrame(CFrame.new(root.Position, cf.p))
+		if Type == Enum.UserInputType.Keyboard then
+			Holding[keyC] = true
+			if keyC == Enum.KeyCode.W then
+				uw = RUN.Heartbeat:Connect(function()		
+					char:SetPrimaryPartCFrame(CFrame.new(root.Position-root.CFrame.LookVector*Speed)* CFrame.fromOrientation(math.rad(root.Orientation.X), math.rad(root.Orientation.Y), math.rad(root.Orientation.Z)))
+					if Holding[keyC] == nil then
+						uw:Disconnect() 
+					end
+				end)
+			elseif keyC == Enum.KeyCode.D then
+				ud = RUN.Heartbeat:Connect(function()		
+					char:SetPrimaryPartCFrame(CFrame.new(root.Position-root.CFrame.RightVector*Speed)* CFrame.fromOrientation(math.rad(root.Orientation.X), math.rad(root.Orientation.Y), math.rad(root.Orientation.Z)))
+					if Holding[keyC] == nil then
+						ud:Disconnect() 
+					end
+				end)
+
+			elseif keyC == Enum.KeyCode.A then
+				ua = RUN.Heartbeat:Connect(function()		
+					char:SetPrimaryPartCFrame(CFrame.new(root.Position+root.CFrame.RightVector*Speed)* CFrame.fromOrientation(math.rad(root.Orientation.X), math.rad(root.Orientation.Y), math.rad(root.Orientation.Z)))
+					if Holding[keyC] == nil then
+						ua:Disconnect() 
+					end
+				end)
+			elseif keyC == Enum.KeyCode.S then
+				us = RUN.Heartbeat:Connect(function()		
+					char:SetPrimaryPartCFrame(CFrame.new(root.Position+root.CFrame.LookVector*Speed)* CFrame.fromOrientation(math.rad(root.Orientation.X), math.rad(root.Orientation.Y), math.rad(root.Orientation.Z)))
+					if Holding[keyC] == nil then
+						us:Disconnect() 
+					end
+				end)
+			elseif keyC == Enum.KeyCode.C then
+				uc = RUN.Heartbeat:Connect(function()		
+					char:SetPrimaryPartCFrame(CFrame.new(root.Position-root.CFrame.UpVector*Speed)* CFrame.fromOrientation(math.rad(root.Orientation.X), math.rad(root.Orientation.Y), math.rad(root.Orientation.Z)))
+					if Holding[keyC] == nil then
+						uc:Disconnect() 
+					end
+				end)
+
+			elseif keyC == Enum.KeyCode.Space then
+				usp = RUN.Heartbeat:Connect(function()		
+					char:SetPrimaryPartCFrame(CFrame.new(root.Position+root.CFrame.UpVector*Speed)* CFrame.fromOrientation(math.rad(root.Orientation.X), math.rad(root.Orientation.Y), math.rad(root.Orientation.Z)))
+					if Holding[keyC] == nil then
+						usp:Disconnect() 
+					end
+				end)
+			elseif keyC == Enum.KeyCode.E then
+				Explosion()
+			elseif keyC == Enum.KeyCode.K then
+				local target = data[5]
+				if target then
+					local fN = target:GetFullName()
+					while Holding[keyC] do
+						local segments=fN:split(".")
+						local current=game
+						for i,v in pairs(segments) do
+							if current:FindFirstChild(v) then
+								current=current[v]
+							else 
+								break
+							end	
+						end
+						if current and current ~= workspace then
+							current:Destroy()
+						end	
+						RUN.Heartbeat:Wait()
+					end
+				end
+			elseif keyC == Enum.KeyCode.F then
+				BlackHole(data[4])
+			elseif keyC == Enum.KeyCode.R then
+				for i,v in pairs(workspace:GetChildren()) do
+					if v.Name == "BlackHoleCenter"..key then
+						v:Destroy()
+					end
+				end	
+			elseif keyC == Enum.KeyCode.G then
+				Eat(data[5])
+			elseif keyC == Enum.KeyCode.P then
+				SpawnPart(data[4])
+			end
+		elseif Type == Enum.UserInputType.MouseButton1 then
+			Holding[Type] = true
+			if Holding[Enum.KeyCode.LeftControl] then
+				MouseDrag(data[5])
+			elseif Holding[Enum.KeyCode.LeftShift] then
+				SuperBeam(data[4])
+			else
+				LaserBeam(data[4])
+			end
+		end	
+	elseif event == "InputEnd" then
+		if data[2] == Enum.UserInputType.Keyboard then
+			Holding[data[1] ] = nil
+		elseif data[2] == Enum.UserInputType.MouseButton1 then
+			Holding[data[2] ] = nil
+		end	
+	end
+end)
+
+updateCF = RUN.Heartbeat:Connect(function()
+	if root then
+		local prev = Saves.CFrames.Root
+		local dist = (prev.p-root.Position).Magnitude
+		if dist > Speed*3 then
+			warn("Moved too fast, "..dist)
+			char:SetPrimaryPartCFrame(prev)
+		else 
+			Saves.CFrames.Root = root.CFrame
+			Saves.CFrames.ArmX1 = ArmX1.CFrame
+			Saves.CFrames.ArmY1 = ArmY1.CFrame
+		end	
+		
+		ArmX1.CFrame = CFrame.new(root.Position.X,root.Position.Y,root.Position.Z)*CFrame.fromOrientation(math.rad(root.Orientation.X),math.rad(root.Orientation.Y),math.rad(ArmX1.Orientation.Z+1))
+		ArmY1.CFrame = CFrame.new(root.Position.X,root.Position.Y,root.Position.Z)*CFrame.fromOrientation(math.rad(root.Orientation.X),math.rad(root.Orientation.Y),math.rad(ArmY1.Orientation.Z+1))
+		
+		
+		Saves.Sounds.AmbientTimePosition = AmbientSound.TimePosition
+	end	
+end)
+
+
+function BuildChar()
+	for i,v in pairs(changeConnections) do
+		v:Disconnect()
+	end
+
+	if char then
+		pcall(function()
+			repeat
+				char:Destroy()
+				RUN.Heartbeat:Wait()
+			until char == nil or char.Parent == nil	
+		end)
+	end
+	
+	--creating
+	key = math.random(1,1000)
+	
+	repeat
+		local succ = pcall(function()
+			char = Instance.new("Model")
+			char.Name = plr.Name.."NewChar"..key
+		end)	
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ	
+
+	-- network (here so it is as seamless as possible)
+	remote:FireClient(plr, "RegisterChar", char.Name)
+
+
+	--creating, again
+	repeat
+		local succ = pcall(function()
+			root = Instance.new("Part")
+			root.Size = Vector3.new(2,2,1)
+			root.Name = "Root"	
+			root.Anchored = true
+			root.CFrame = Saves.CFrames.Root
+			root.Color = Color3.fromRGB(10,10,10)
+			root.Material = Enum.Material.Neon
+			
+			char.PrimaryPart = root
+		end)
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ
+	
+
+	repeat
+		local succ = pcall(function()
+			rootProt1 = Instance.new("Part")
+			rootProt1.Size = Vector3.new(2.1,2.1,1.1)
+			rootProt1.Name = "RootProt1"	
+			rootProt1.CFrame = Saves.CFrames.Root
+			rootProt1.CanCollide = false
+			rootProt1.Transparency = .7
+			rootProt1.Anchored = true
+			rootProt1.Material = Enum.Material.SmoothPlastic
+			rootProt1.Color = Color3.fromRGB(10,10,10)
+		end)
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ
+
+
+	repeat
+		local succ = pcall(function()
+			rootProt2 = Instance.new("Part")
+			rootProt2.Size = Vector3.new(2.2,2.2,1.2)
+			rootProt2.Name = "RootProt2"	
+			rootProt2.CFrame = Saves.CFrames.Root
+			rootProt2.CanCollide = false
+			rootProt2.Transparency = .7
+			rootProt2.Locked = true
+			rootProt2.Anchored = true
+			rootProt2.Material = Enum.Material.SmoothPlastic
+			rootProt2.Color = Color3.fromRGB(10,10,10)
+		end)
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ
+	
+
+	repeat
+		local succ = pcall(function()
+			ArmX1 = Instance.new("Part")
+			ArmX1.Size = Vector3.new(5,.3,.3)
+			ArmX1.CFrame = Saves.CFrames.ArmX1
+			ArmX1.Name = "ArmX1"
+			ArmX1.Anchored = true
+			ArmX1.Material = Enum.Material.Neon
+			ArmX1.Color = Color3.fromRGB(20,20,20)
+		end)
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ
+	
+
+	repeat
+		local succ = pcall(function()
+
+			ArmY1 = Instance.new("Part")
+			ArmY1.Size = Vector3.new(5,.3,.3)
+			ArmY1.CFrame = Saves.CFrames.ArmY1
+			ArmY1.Name = "ArmY1"
+			ArmY1.Anchored = true
+			ArmY1.Material = Enum.Material.Neon
+			ArmY1.Color = Color3.fromRGB(20,20,20)
+		end)
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ
+	
+	
+	repeat
+		local succ = pcall(function()
+
+			AmbientSound = Instance.new("Sound")
+			AmbientSound.SoundId = "rbxassetid://4479951541"
+			AmbientSound.TimePosition = Saves.Sounds.AmbientTimePosition
+			AmbientSound.Volume = .5
+			AmbientSound.EmitterSize = 20
+			AmbientSound.Looped = true
+			AmbientSound:Play()
+		end)
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ
+		
+	repeat
+		local succ = pcall(function()
+
+			particle = Instance.new("ParticleEmitter")
+			particle.Size = NumberSequence.new(0.1,0)
+			particle.Texture = "rbxassetid://24419398"
+			particle.LockedToPart = true
+			particle.Lifetime = NumberRange.new(2,2)
+			particle.Rate = 5
+			particle.Speed = NumberRange.new(2,2)
+			particle.SpreadAngle = Vector2.new(180,180)
+		end)
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ
+	
+	
+	repeat
+		local succ = pcall(function()
+			chatbillboard = Instance.new("BillboardGui")
+			chatbillboard.Size = UDim2.fromScale(8,3)
+			chatbillboard.ExtentsOffset = Vector3.new(0,4,0)
+			chatbillboard.Name = "ChatBillboard"
+			
+			chattext = Instance.new("TextLabel")
+			chattext.Size = UDim2.fromScale(1,1)
+			chattext.BackgroundTransparency = 1
+			chattext.Text = ""
+			--chattext.TextColor3 = Color3.fromRGB(200,200,200)
+			chattext.TextStrokeTransparency = 0.6
+			chattext.TextStrokeColor3 = Color3.fromRGB(200,200,200)
+			chattext.Font = Enum.Font.Highway
+			chattext.TextScaled = true
+		end)
+		if not succ then
+			RUN.Heartbeat:Wait()
+		end
+	until succ
+		
+	--parenting
+	
+	chattext.Parent = chatbillboard
+	chatbillboard.Parent = root
+
+	AmbientSound.Parent = root
+	particle.Parent = root
+
+	root.Parent = char
+
+	rootProt1.Parent = char
+	rootProt2.Parent = char
+
+	ArmX1.Parent = char
+	ArmY1.Parent = char
+
+
+	char.Parent = workspace
+
+	-- change handling
+	IgnoreChanges["char"] = false
+	
+	changeConnections = {}
+	changeConnections[1] = char.Changed:Connect(function(prop)
+		if table.find(CharIgnoreChanges, prop) then
+			return
+		end
+		 
+		if not IgnoreChanges["char"] then
+			warn("Property "..prop.." changed on character model, reverting ", tostring(char[prop]))
+			IgnoreChanges["char"] = true
+						
+			if prop == "Parent" then
+				CreateChar()
+				return
+			elseif prop == "PrimaryPart" then
+				char.PrimaryPart = root
+			elseif prop ~= "Name" then
+				warn("Creating new char because "..prop.." was changed on char")
+				IgnoreChanges["char"] = false
+				CreateChar()
+				return
+			end
+			
+			key = math.random(1,1000)
+			char.Name = plr.Name.."NewChar"..key
+			
+			IgnoreChanges["char"] = false
+		end	
+	end)
+
+	for i,v in pairs(char:GetDescendants()) do
+		IgnoreChanges[v.Name] = false
+		
+		local DefaultProps = {
+			Parent = v.Parent	,
+			Name = v.Name
+		}
+		local defaultP = v.Parent
+		if v:IsA("BasePart") then
+			DefaultProps.Color = v.Color
+			DefaultProps.Material = v.Material
+			DefaultProps.Anchored = v.Anchored
+			DefaultProps.CanCollide = v.CanCollide
+			DefaultProps.Size = v.Size
+		end	
+		changeConnections[#changeConnections+1] = v.Changed:Connect(function(prop)
+			if table.find(IgnoreChanges, prop) == nil and not IgnoreChanges[v.Name] then
+				warn("Property "..prop.." changed on "..v.Name..", reverting ", tostring(v[prop]))
+				IgnoreChanges[v.Name] = true
+				--IgnoreChanges["char"] = true
+				key = math.random(1,1000)
+				char.Name = plr.Name.."NewChar"..key
+				if prop == "Parent" then
+					CreateChar()
+				elseif DefaultProps[prop] ~= nil then
+					v[prop] = DefaultProps[prop]
+				else
+					warn("Creating new char because "..prop.." was changed on "..v.Name)
+					CreateChar()
+				end
+				--RUN.Heartbeat:Wait()
+				IgnoreChanges[v.Name] = false
+				--IgnoreChanges["char"] = false
+			end
+		end)
+	end
+	
+	if char.Parent == nil or char.PrimaryPart == nil then
+		error("Unable to create")
+	end
+	
+	print("Created character")
+end
+
+function CreateChar()
+	xpcall(BuildChar, function(e)
+		warn("Failed to create char, '"..e.."', trying again")
+		wait(1)
+		CreateChar()
+	end)
+end
+
+
+repeat
+	RUN.Heartbeat:Wait()
+until plr
+
+local pchar = workspace:WaitForChild(plr.Name)
+pchar.Archivable = true
+pchar.Parent = SS
+
+local gMsg = ""
+
+plr.Chatted:Connect(function(msg)
+	gMsg = msg
+	if msg == "s" then
+		stop = true
+
+		updateCF:Disconnect()
+		eventR:Disconnect()
+
+		for i,v in pairs(changeConnections) do
+			v:Disconnect()
+		end
+		
+		for i,v in pairs(workspace:GetChildren()) do
+			if v.Name == "BlackHoleCenter"..key then
+				v:Destroy()
+			end
+		end
+		
+
+		char:Destroy()
+
+		remote:FireClient(plr, "Stop")
+		if RemoteChangeConnection then
+			RemoteChangeConnection:Disconnect()
+		end		
+		remote:Destroy()
+		
+		script:Destroy()
+
+		print("Stopped")
+	end
+	chattext.Text = msg
+	wait(4)
+	if gMsg == msg then
+		chattext.Text = ""
+	end
+end)
+
+plr.CharacterAdded:Connect(function(pcharr)
+	if SS:FindFirstChild(pchar.Name) == nil then
+		local pchar = workspace:WaitForChild(pchar.Name)
+		pchar.Archivable = true
+		pchar.Parent = SS
+	end	
+end)
+
+print("Server script loaded")
