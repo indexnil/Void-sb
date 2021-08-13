@@ -100,7 +100,7 @@ local function Chase(char)
 	expsound:Play()
 	
 	local exp = Instance.new("Explosion")
-	exp.BlastPressure = 500000000
+	exp.BlastPressure = 50000000
 	exp.Position = NPC.Body.Position
 	exp.Parent = NPC.Body
 	wait()
@@ -120,19 +120,21 @@ end
 NPC = SpawnNPC()
 
 
-R.OnServerEvent:Connect(function(plr,pos, target)
+R.OnServerEvent:Connect(function(plr,pos,target)
+	
+	if pos == "stop" then
+		NPC:Destroy()
+		R:Destroy()
+		return
+	end
+	
+	print(target)
 	if Chasing then
 		return
 	end
 	
 	if MoveTween then
 		MoveTween:Cancel()
-	end
-	
-	if pos == "stop" then
-		NPC:Destroy()
-		R:Destroy()
-		return
 	end
 	
 	if target and target.Parent:FindFirstChild("Humanoid") then
