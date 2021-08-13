@@ -125,6 +125,7 @@ R.OnServerEvent:Connect(function(plr,pos,target)
 	if pos == "stop" then
 		NPC:Destroy()
 		R:Destroy()
+		print("stopped")
 		return
 	end
 	
