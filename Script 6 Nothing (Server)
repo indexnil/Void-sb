@@ -1,5 +1,3 @@
--- click a player to kill them, click anywhere else to move to there, press r to stop the script
-
 local RS = game:GetService("ReplicatedStorage")
 local TS = game:GetService("TweenService")
 --6313794194
@@ -89,7 +87,7 @@ local function Chase(char)
 	NPC.Body.Sound.Looped = false
 	NPC.Body.Sound:Play()
 	NPC:SetPrimaryPartCFrame(CFrame.new(NPC.PrimaryPart.Position, root.Position)*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
-	MoveTween = tweenModel(NPC, TweenInfo.new(15, Enum.EasingStyle.Linear), CFrame.new(NPC.PrimaryPart.Position:Lerp(root.Position,0.9), root.Position)*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
+	MoveTween = tweenModel(NPC, TweenInfo.new(15, Enum.EasingStyle.Linear), CFrame.new(NPC.PrimaryPart.Position:Lerp(root.Position,0.99), root.Position)*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
 		--wait(2)
 	--end
 	
