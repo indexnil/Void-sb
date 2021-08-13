@@ -14,8 +14,6 @@ local rayparams = RaycastParams.new()
 UIS.InputEnded:Connect(function(key)
 	local MousePos = UIS:GetMouseLocation() - GS:GetGuiInset()
 
-	local Guis = plr.PlayerGui:GetGuiObjectsAtPosition(MousePos.X, MousePos.Y)
-
 	local UnitRay = cam:ScreenPointToRay(MousePos.X, MousePos.Y)
 	local Result = workspace:Raycast(UnitRay.Origin, UnitRay.Direction * 900, rayparams)
 	
