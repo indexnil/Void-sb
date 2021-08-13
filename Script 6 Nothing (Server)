@@ -8,6 +8,8 @@ R.Name = "voidsb6"
 
 local TargetPos = Vector3.new()
 local MoveTween 
+local Chasing =false
+local NPC
 
 local function tweenModel(model, info, CF)
 	local CFrameValue = Instance.new("CFrameValue")
@@ -35,6 +37,7 @@ local function SpawnNPC()
 	Body.Color = Color3.fromRGB(255, 0, 0)
 	Body.Size = Vector3.new(4.3, 2.6, 3)
 	Body.Orientation = Vector3.new(0, 0, -90)
+	Body.Name = "Body"
 	
 	local Head = Instance.new("Part")
 	Head.Anchored = true
@@ -73,10 +76,54 @@ local function SpawnNPC()
 	return NPC
 end
 
-local NPC = SpawnNPC()
+local function Chase(char)
+	print("chasing "..char.Name)
+	Chasing = true
+	local root = char.HumanoidRootPart
+	root.Anchored = true
 
-R.OnServerEvent:Connect(function(plr,pos)
+	--while (NPC.PrimaryPart.Position-root.Position).Magnitude > 2 do
+	NPC.Body.Sound.SoundId = "rbxassetid://6832888199"
+	NPC.Body.Sound.Looped = false
+	NPC.Body.Sound:Play()
+	NPC:SetPrimaryPartCFrame(CFrame.new(NPC.PrimaryPart.Position, root.Position)*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
+	MoveTween = tweenModel(NPC, TweenInfo.new(15, Enum.EasingStyle.Linear), CFrame.new(NPC.PrimaryPart.Position:Lerp(root.Position,0.9), root.Position)*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
+		--wait(2)
+	--end
 	
+	MoveTween.Completed:Wait()
+	
+	local expsound = Instance.new("Sound")
+	expsound.Volume = 10
+	expsound.SoundId = "rbxassetid://4643825537"
+	expsound.Parent = NPC.Body
+	expsound:Play()
+	
+	local exp = Instance.new("Explosion")
+	exp.BlastPressure = 500000000
+	exp.Position = NPC.Body.Position
+	exp.Parent = NPC.Body
+	wait()
+	root.Anchored = false
+	
+	wait(2.5)
+	NPC.Body.Sound.SoundId = "rbxassetid://6313794194"
+	NPC.Body.Sound.Looped = true
+	NPC.Body.Sound:Play()
+	
+	wait(1)
+	expsound:Destroy()
+	
+	Chasing = false
+end
+
+NPC = SpawnNPC()
+
+
+R.OnServerEvent:Connect(function(plr,pos, target)
+	if Chasing then
+		return
+	end
 	
 	if MoveTween then
 		MoveTween:Cancel()
@@ -88,12 +135,17 @@ R.OnServerEvent:Connect(function(plr,pos)
 		return
 	end
 	
+	if target and target.Parent:FindFirstChild("Humanoid") then
+		Chase(target.Parent)
+		return
+	end
+	
 	TargetPos = pos+Vector3.new(0,2.1,0)
 	
 	--MoveTween = TS:Create(TweenValue, TweenInfo.new((NPC.PrimaryPart.Position-pos).Magnitude/16, Enum.EasingStyle.Linear), {Value = TargetPos})
 	--MoveTween:Play()
 	NPC:SetPrimaryPartCFrame(CFrame.new(NPC.PrimaryPart.Position, TargetPos*Vector3.new(1.1,1,1.1))*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
-	MoveTween = tweenModel(NPC, TweenInfo.new((NPC.PrimaryPart.Position-pos).Magnitude/16, Enum.EasingStyle.Linear), CFrame.new(TargetPos, TargetPos*Vector3.new(1.1,1,1.1))*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
+	MoveTween = tweenModel(NPC, TweenInfo.new((NPC.PrimaryPart.Position-pos).Magnitude/25, Enum.EasingStyle.Linear), CFrame.new(TargetPos, TargetPos*Vector3.new(1.1,1,1.1))*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
 end)
 
 
