@@ -1,0 +1,104 @@
+local RS = game:GetService("ReplicatedStorage")
+local TS = game:GetService("TweenService")
+--6313794194
+local R = RS:FindFirstChild("voidsb6") or Instance.new("RemoteEvent", RS)
+R.Name = "voidsb6"
+
+--local TweenValue = Instance.new("Vector3Value")
+
+local TargetPos = Vector3.new()
+local MoveTween 
+
+local function tweenModel(model, info, CF)
+	local CFrameValue = Instance.new("CFrameValue")
+	CFrameValue.Value = model:GetPrimaryPartCFrame()
+
+	CFrameValue:GetPropertyChangedSignal("Value"):Connect(function()
+		model:SetPrimaryPartCFrame(CFrameValue.Value)
+	end)
+
+	local tween = TS:Create(CFrameValue, info, {Value = CF})
+	tween:Play()
+
+	tween.Completed:Connect(function()
+		CFrameValue:Destroy()
+	end)
+	
+	return tween
+end
+
+local function SpawnNPC()
+	local Body = Instance.new("Part")
+	Body.Anchored = true
+	Body.Material = Enum.Material.SmoothPlastic
+	Body.Shape = Enum.PartType.Cylinder
+	Body.Color = Color3.fromRGB(255, 0, 0)
+	Body.Size = Vector3.new(4.3, 2.6, 3)
+	Body.Orientation = Vector3.new(0, 0, -90)
+	
+	local Head = Instance.new("Part")
+	Head.Anchored = true
+	Head.Material = Enum.Material.SmoothPlastic
+	Head.Shape = Enum.PartType.Ball
+	Head.Color = Color3.fromRGB(255, 0, 0)
+	Head.Size = Vector3.new(2.6, 2.6, 2.6)
+	Head.Position = Vector3.new(0, 2.16, 0)
+	Head.Orientation = Vector3.new(0, 0, -90)
+
+	local Goggles = Instance.new("Part")
+	Goggles.Anchored = true
+	Goggles.Material = Enum.Material.SmoothPlastic
+	Goggles.Color = Color3.fromRGB(27, 42, 53)
+	Goggles.Size = Vector3.new(0.7, 1.3, 1.6)
+	Goggles.Position = Vector3.new(0.05, 1.71, 0.5)
+	Goggles.Orientation = Vector3.new(0, 0, -90)
+	
+	local Sound = Instance.new("Sound")
+	Sound.Looped = true
+	Sound.SoundId = "rbxassetid://6313794194"
+	Sound.Volume = 10
+	Sound.Parent = Body
+	Sound:Play()	
+	
+	local NPC = Instance.new("Model")
+	NPC.Name = "NPC"
+	
+	Body.Parent = NPC
+	Head.Parent = NPC
+	Goggles.Parent = NPC
+
+	NPC.PrimaryPart = Body
+	NPC.Parent = workspace
+	
+	return NPC
+end
+
+local NPC = SpawnNPC()
+
+R.OnServerEvent:Connect(function(plr,pos)
+	
+	
+	if MoveTween then
+		MoveTween:Cancel()
+	end
+	
+	if pos == "stop" then
+		NPC:Destroy()
+		R:Destroy()
+		return
+	end
+	
+	TargetPos = pos+Vector3.new(0,2.1,0)
+	
+	--MoveTween = TS:Create(TweenValue, TweenInfo.new((NPC.PrimaryPart.Position-pos).Magnitude/16, Enum.EasingStyle.Linear), {Value = TargetPos})
+	--MoveTween:Play()
+	NPC:SetPrimaryPartCFrame(CFrame.new(NPC.PrimaryPart.Position, TargetPos*Vector3.new(1.1,1,1.1))*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
+	MoveTween = tweenModel(NPC, TweenInfo.new((NPC.PrimaryPart.Position-pos).Magnitude/16, Enum.EasingStyle.Linear), CFrame.new(TargetPos, TargetPos*Vector3.new(1.1,1,1.1))*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
+end)
+
+
+--[[TweenValue.Changed:Connect(function()
+	print(TweenValue.Value)
+	NPC:SetPrimaryPartCFrame(CFrame.new(TweenValue.Value, TargetPos:Lerp(TargetPos,1.01))*CFrame.fromOrientation(0,math.rad(180),math.rad(-90)))
+end)
+]]
