@@ -1,19 +1,26 @@
 local RS = game:GetService("ReplicatedStorage")
 local PL = game:GetService("Players")
 local UIS  = game:GetService("UserInputService")
+local GS = game:GetService("GuiService")
 
 local R = RS:WaitForChild("voidsb6")
 
 local plr = PL.LocalPlayer
 
-local Mouse = plr:GetMouse()
-
-
 local cam = workspace.CurrentCamera
 
+local rayparams = RaycastParams.new()
+
 UIS.InputEnded:Connect(function(key)
-	if key.UserInputType == Enum.UserInputType.MouseButton1 then
-		R:FireServer(Mouse.Hit.Position)
+	local MousePos = UIS:GetMouseLocation() - GS:GetGuiInset()
+
+	local Guis = plr.PlayerGui:GetGuiObjectsAtPosition(MousePos.X, MousePos.Y)
+
+	local UnitRay = cam:ScreenPointToRay(MousePos.X, MousePos.Y)
+	local Result = workspace:Raycast(UnitRay.Origin, UnitRay.Direction * 900, rayparams)
+	
+	if key.UserInputType == Enum.UserInputType.MouseButton1 and Result then
+		R:FireServer(Result.Position, Result.Instance)
 	elseif key.KeyCode == Enum.KeyCode.R then
 		R:FireServer("stop")
 	end	
