@@ -1,3 +1,5 @@
+-- click a player to kill them, click anywhere else to move to there, press r to stop the script
+
 local RS = game:GetService("ReplicatedStorage")
 local TS = game:GetService("TweenService")
 --6313794194
