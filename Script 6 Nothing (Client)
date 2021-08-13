@@ -1,0 +1,20 @@
+local RS = game:GetService("ReplicatedStorage")
+local PL = game:GetService("Players")
+local UIS  = game:GetService("UserInputService")
+
+local R = RS:WaitForChild("voidsb6")
+
+local plr = PL.LocalPlayer
+
+local Mouse = plr:GetMouse()
+
+
+local cam = workspace.CurrentCamera
+
+UIS.InputEnded:Connect(function(key)
+	if key.UserInputType == Enum.UserInputType.MouseButton1 then
+		R:FireServer(Mouse.Hit.Position)
+	elseif key.KeyCode == Enum.KeyCode.R then
+		R:FireServer("stop")
+	end	
+end)
